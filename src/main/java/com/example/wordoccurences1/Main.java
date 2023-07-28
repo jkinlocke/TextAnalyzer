@@ -12,6 +12,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.*;
 
 public class Main extends Application {
@@ -24,8 +28,8 @@ public class Main extends Application {
      */
     public static void main(String[] args) {
         launch(args);
-    }
 
+    }
     /**
      * This class creates the textArea where the word frequency is displayed.
      * Creates the button to trigger the analysis.
@@ -35,7 +39,7 @@ public class Main extends Application {
      */
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Text Analyzer");
+        primaryStage.setTitle("Word Occurrences for Edgar Allen Poe's: The Raven");
 
         // Create the TextArea to display the output
         outputTextArea = new TextArea();
@@ -54,6 +58,7 @@ public class Main extends Application {
         primaryStage.setScene(new Scene(root, 400, 500));
         primaryStage.show();
     }
+
 
     /**
      * Analyzes the text given through the url.
@@ -92,7 +97,8 @@ public class Main extends Application {
             String poem = poemBuilder.toString();
 
             // Remove all HTML tags
-            poem = poem.replaceAll("<.*?>", "");
+            poem = poem.replaceAll("<[^>]+>", "");
+
 
             // Tokenize the poem's content into words
             StringTokenizer tokenizer = new StringTokenizer(poem, " \t\n\r\f.,;:!?\"'-()[]{}");
@@ -109,19 +115,61 @@ public class Main extends Application {
             List<Map.Entry<String, Integer>> wordList = new ArrayList<>(wordFreqs.entrySet());
             Collections.sort(wordList, (a, b) -> b.getValue().compareTo(a.getValue()));
 
+            storeWordFrequencyData(wordList);
+
             // Update the TextArea with the word frequency statistics
             StringBuilder outputBuilder = new StringBuilder();
             for (Map.Entry<String, Integer> entry : wordList) {
-                outputBuilder.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+                outputBuilder.append(entry.getKey()).append("---").append(entry.getValue()).append("\n");
             }
             outputTextArea.setText(outputBuilder.toString());
 
-            // Close the reader
+
             reader.close();
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
         return 0;
+        }
+
+    /**
+     * Stores the word frequency data in the database.
+     *
+     * @param wordList the list of word frequency entries to be stored in the database.
+     * @throws SQLException If an error occurs during database operations.
+     */
+    public void storeWordFrequencyData(List<Map.Entry<String, Integer>> wordList) throws SQLException {
+        // Establish a database connection
+        String url = "jdbc:mysql://localhost:3306/wordoccurrences";
+        String username = "root";
+        String password = "pass123";
+        Connection connection = DriverManager.getConnection(url, username, password);
+
+        // Prepare the SQL insert statement
+        String insertQuery = "INSERT INTO word (word, id) VALUES (?, ?)" +
+        "ON DUPLICATE KEY UPDATE id = VALUES(id)";;
+        PreparedStatement preparedStatement = connection.prepareStatement(insertQuery);
+
+        // Insert the word frequency data into the database
+        for (Map.Entry<String, Integer> entry : wordList) {
+            String word = entry.getKey();
+            int id = entry.getValue();
+            preparedStatement.setString(1, word);
+            preparedStatement.setInt(2, id);
+            preparedStatement.executeUpdate();
+        }
+
+        // Close the prepared statement and the database connection
+        preparedStatement.close();
+        connection.setAutoCommit(true);
+
+        connection.close();
     }
 }
+
+
+
+
 
